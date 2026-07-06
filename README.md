@@ -1,52 +1,38 @@
 # Indian Stock Market Financial Data Extractor
 
-This repository provides a robust toolset for extracting historical financial data for all companies listed on the National Stock Exchange (NSE) and Bombay Stock Exchange (BSE) of India.
+This repository contains tools for extracting historical annual financial statements and recent key metrics for companies listed on the National Stock Exchange (NSE) and Bombay Stock Exchange (BSE) of India.
 
-## Overview
-The extractor leverages the `yahooquery` library to fetch comprehensive financial data from Yahoo Finance. It is designed to handle the scale of the Indian market (17,000+ tickers) by implementing multi-threading, batching, and a persistent checkpointing system to ensure data integrity and resume capabilities.
+## Features
+- **Consolidated Registry**: Merges NSE and BSE listed company lists using ISIN and Symbol mapping.
+- **Comprehensive Extraction**: Fetches Income Statements, Balance Sheets, and Cash Flow statements (up to 15 years) from Yahoo Finance.
+- **Wide-Format Output**: Generates an Excel file with metrics labeled by year for easy longitudinal analysis.
 
-## Key Features
-- **Historical Depth**: Fetches up to 15 years of annual financial statements (Income Statement, Balance Sheet, Cash Flow).
-- **Comprehensive Metrics**: Captures all available fields including Revenue, Operating Income, Shares Outstanding, Receivables, Inventory, PP&E, Accounts Payable, and Enterprise Value (TEV).
-- **Automated Mapping**: Merges NSE and BSE company registries using ISIN to ensure accurate cross-exchange data.
-- **Optimized for Scale**: Uses asynchronous fetching and multi-threading for high-performance extraction.
-- **Data Precision**: Maintains raw INR values as provided by the official sources without rounding.
-- **Wide-Format Output**: Flattens complex financial data into a single Excel row per company, with columns labeled by fiscal year for easy analysis.
+## Setup
 
-## Installation
-Ensure you have Python 3.10+ installed. Install the required dependencies:
-
-```bash
-pip install pandas yahooquery openpyxl requests
-```
-
-## Usage
-
-### 1. Quick Start: Nifty 50
-To verify the extraction logic and generate a dataset for the Nifty 50 constituents:
-```bash
-python fetch_nifty50_financials.py
-```
-This will produce `Nifty50_Financials.xlsx` containing the full history for the top 50 companies.
-
-### 2. Large Scale Market Extraction
-To extract data for all listed companies:
-1. **Consolidate Lists**: Merge the NSE and BSE metadata.
+1. **Install Dependencies**:
    ```bash
-   python consolidate_lists.py
+   pip install -r requirements.txt
    ```
-2. **Run Full Extraction**:
-   ```bash
-   python fetch_all_financials.py
-   ```
-   *Note: Extracting all 17,000+ companies is data-intensive and may take several hours. The script saves progress to `extraction_checkpoint.json` automatically.*
 
-## Repository Structure
-- `fetch_nifty50_financials.py`: Optimized script for Nifty 50 data extraction.
-- `fetch_all_financials.py`: Robust, multi-threaded engine for full-market extraction.
-- `consolidate_lists.py`: Utility to download and merge NSE/BSE registries.
-- `Nifty50_Financials.xlsx`: Sample dataset containing multi-year financials for Nifty 50.
-- `nifty50_list.csv`: Source list of Nifty 50 symbols.
+## Execution Steps
 
-## Data Source & Reliability
-Data is fetched directly from Yahoo Finance via the `yahooquery` interface. This source provides a reliable and historical alternative to direct exchange scraping, which is often subject to aggressive anti-bot measures. The metrics are derived from consolidated annual reports (12M period type).
+### 1. Prepare Stock List
+Generate the consolidated list of NSE and BSE stocks:
+```bash
+python scripts/prepare_stock_list.py
+```
+This produces `data/nse_bse_stocks_combined.csv`.
+
+### 2. Fetch Fundamentals
+Extract financial data for the stocks in the list:
+```bash
+python scripts/fetch_fundamentals.py [sample_size]
+```
+- To run a test on 10 random stocks: `python scripts/fetch_fundamentals.py 10`
+- To run for all stocks (Time intensive): `python scripts/fetch_fundamentals.py`
+- Final output is saved to `data/NSE_BSE_Comprehensive_Financials.xlsx`.
+
+## Directory Structure
+- `data/`: Contains the consolidated stock list and the final financial dataset.
+- `scripts/`: Contains the logic for list preparation and data extraction.
+- `requirements.txt`: Python package dependencies.
