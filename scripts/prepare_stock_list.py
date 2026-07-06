@@ -2,23 +2,29 @@ import pandas as pd
 import requests
 import os
 import io
+from pathlib import Path
+
+
 
 def fetch_nse_list():
     print("Fetching NSE list...")
-    url = "https://archives.nseindia.com/content/equities/EQUITY_L.csv"
+    url = "https://nsearchives.nseindia.com/content/equities/EQUITY_L.csv"
     headers = {"User-Agent": "Mozilla/5.0"}
     r = requests.get(url, headers=headers)
     df = pd.read_csv(io.StringIO(r.text))
-    df.columns = df.columns.str.strip()
+    df.columns = df.columns.str.strip().str.lower()
 
     # Save interim NSE file
-    os.makedirs('data', exist_ok=True)
-    df.to_csv('data/stocks_nse.csv', index=False)
+    # Resolves to one level above the script file
+    parent_dir = Path(__file__).resolve().parents[1]
+    os.makedirs(parent_dir / 'data', exist_ok=True)
 
-    return df[['SYMBOL', 'NAME OF COMPANY', 'ISIN NUMBER']].rename(columns={
-        'SYMBOL': 'Symbol',
-        'NAME OF COMPANY': 'Company_Name',
-        'ISIN NUMBER': 'ISIN'
+    df.to_csv(parent_dir / 'data' / 'stocks_nse.csv', index=False)
+
+    return df[['symbol', 'name of company', 'isin number']].rename(columns={
+        'symbol': 'Symbol',
+        'name of company': 'Company_Name',
+        'isin number': 'ISIN'
     })
 
 def fetch_bse_list():
@@ -33,15 +39,17 @@ def fetch_bse_list():
             if 'BSE_EQ_SCRIP' in name:
                 with z.open(name) as f:
                     df = pd.read_csv(f, low_memory=False)
-                    df.columns = df.columns.str.strip()
+                    df.columns = df.columns.str.strip().str.lower()
 
                     # Save interim BSE file
-                    df.to_csv('data/stocks_bse.csv', index=False)
+                    parent_dir = Path(__file__).resolve().parents[1]
+                    df.to_csv(parent_dir / 'data' / 'stocks_bse.csv', index=False)
 
-                    return df[['FinInstrmId', 'TckrSymb', 'ISIN', 'FinInstrmNm']].rename(columns={
-                        'FinInstrmId': 'BSE_Code',
-                        'TckrSymb': 'Symbol',
-                        'FinInstrmNm': 'Company_Name'
+                    return df.loc[df['sctytpflg'] == 'EQ', ['fininstrmid', 'tckrsymb', 'isin', 'fininstrmnm']].rename(columns={
+                        'fininstrmid': 'BSE_Code',
+                        'tckrsymb': 'Symbol',
+                        'isin': 'ISIN',
+                        'fininstrmnm': 'Company_Name'
                     })
     except Exception as e:
         print(f"Error fetching BSE list: {e}")
@@ -63,8 +71,8 @@ def main():
     # Final cleanup
     combined = combined[['Company_Name', 'Symbol', 'BSE_Code', 'ISIN']]
 
-    os.makedirs('data', exist_ok=True)
-    combined.to_csv('data/nse_bse_stocks_combined.csv', index=False)
+    parent_dir = Path(__file__).resolve().parents[1]
+    combined.to_csv(parent_dir / 'data' / 'nse_bse_stocks_combined.csv', index=False)
     print(f"Saved {len(combined)} stocks to data/nse_bse_stocks_combined.csv")
 
 if __name__ == "__main__":
