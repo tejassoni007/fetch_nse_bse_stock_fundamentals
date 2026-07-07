@@ -18,14 +18,64 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(me
 INPUT_FILE = 'data/nse_bse_stocks_combined.csv'
 OUTPUT_EXCEL = 'data/NSE_BSE_Comprehensive_Financials.xlsx'
 
+def get_ticker_data(ticker):
+    """
+    Helper function to fetch all available financial data for a single ticker.
+    Returns a dictionary with dataframes and summary metrics.
+    """
+    if not ticker:
+        return None
+
+    try:
+        stock = yq.Ticker(ticker)
+
+        # Fetching annual financial statements (Income, Balance, Cash Flow)
+        income = stock.income_statement(frequency='a')
+        balance = stock.balance_sheet(frequency='a')
+        cashflow = stock.cash_flow(frequency='a')
+
+        # Summary information (Key Stats and Summary Detail)
+        ks = stock.key_stats.get(ticker, {})
+        sd = stock.summary_detail.get(ticker, {})
+
+        # Flattening financials into a single structure
+        dfs = []
+        for df in [income, balance, cashflow]:
+            if isinstance(df, pd.DataFrame) and not df.empty:
+                # Ensure we only work with full-year (12M) data
+                if 'periodType' in df.columns:
+                    df = df[df['periodType'] == '12M']
+                if not df.empty:
+                    # Reset index to make asOfDate accessible as a column
+                    if 'asOfDate' not in df.columns:
+                        df = df.reset_index()
+                    dfs.append(df)
+
+        merged_df = pd.DataFrame()
+        if dfs:
+            merged_df = dfs[0]
+            for next_df in dfs[1:]:
+                # Merge on date to align different statement entries
+                cols_to_use = next_df.columns.difference(merged_df.columns).tolist() + ['asOfDate']
+                merged_df = pd.merge(merged_df, next_df[cols_to_use], on='asOfDate', how='outer')
+
+        return {
+            'financials': merged_df,
+            'recent': {**(ks if isinstance(ks, dict) else {}), **(sd if isinstance(sd, dict) else {})}
+        }
+    except Exception as e:
+        logging.debug(f"Error fetching {ticker}: {e}")
+        return None
+
 def fetch_data(sample_limit=None):
     if not os.path.exists(INPUT_FILE):
-        logging.error(f"{INPUT_FILE} not found. Run scripts/prepare_stock_list.py first.")
+        logging.error(f"{INPUT_FILE} not found. Ensure prepare_stock_list.py has been run.")
         return
 
+    # Load consolidated stock registry
     df_stocks = pd.read_csv(INPUT_FILE)
 
-    # Handle sampling if requested
+    # Handle sampling for testing (e.g., 10 random stocks)
     if sample_limit:
         logging.info(f"Randomly selecting {sample_limit} companies for test...")
         df_stocks = df_stocks.sample(n=min(sample_limit, len(df_stocks)))
@@ -33,98 +83,80 @@ def fetch_data(sample_limit=None):
     all_data = []
 
     for _, stock in df_stocks.iterrows():
-        # Prefer NSE symbol if available
-        # Based on new prepare_stock_list, we have 'Symbol' and 'BSE_Code'
-        # symbol = 'RGIL'
-        # bse_code = 539922
+        # Identify listed exchanges and build tickers
         symbol_nse = stock.get('Symbol_NSE')
         symbol_bse = stock.get('Symbol_BSE')
-        if pd.notnull(symbol_nse):
-            ticker_nse = f"{str(symbol_nse).strip()}.NS"
+        bse_code = stock.get('BSE_Code')
+
+        ticker_nse = f"{str(symbol_nse).strip()}.NS" if pd.notnull(symbol_nse) else None
+        # Use BSE Script Code for more reliable Yahoo Finance matching on BSE
+        ticker_bse = f"{str(int(bse_code)).strip()}.BO" if pd.notnull(bse_code) else (f"{str(symbol_bse).strip()}.BO" if pd.notnull(symbol_bse) else None)
+
+        logging.info(f"Processing {stock['Company_Name']} (NSE: {ticker_nse}, BSE: {ticker_bse})...")
+
+        # Fetch data from both sources if available
+        data_nse = get_ticker_data(ticker_nse)
+        data_bse = get_ticker_data(ticker_bse)
+
+        # Intelligence: Compare and pick the source with more data
+        # We prioritize the number of records in the financial statements
+        nse_count = len(data_nse['financials']) if data_nse and not data_nse['financials'].empty else 0
+        bse_count = len(data_bse['financials']) if data_bse and not data_bse['financials'].empty else 0
+
+        if nse_count >= bse_count and data_nse:
+            selected_data = data_nse
+            selected_ticker = ticker_nse
+        elif data_bse:
+            selected_data = data_bse
+            selected_ticker = ticker_bse
         else:
-            ticker_nse = None
-        if pd.notnull(symbol_bse):
-            ticker_bse = f"{str(symbol_bse).strip()}.BO"
-        else:
-            ticker_bse = None
+            logging.warning(f"No meaningful data found for {stock['Company_Name']}")
+            continue
 
-        try:
-            logging.info(f"Fetching data for BSE {ticker_bse} and NSE {ticker_nse}...")
-            yq_stock_bse = yq.Ticker(ticker_bse)
-            yq_stock_nse = yq.Ticker(ticker_nse)
+        # Build the flat record
+        row = {
+            'Company Name': stock['Company_Name'],
+            'Symbol_NSE': stock.get('Symbol_NSE'),
+            'Symbol_BSE': stock.get('Symbol_BSE'),
+            'BSE Code': stock.get('BSE_Code'),
+            'ISIN': stock.get('ISIN'),
+            'Selected Ticker': selected_ticker
+        }
 
-            # Annual Financials (12M only)
-            income_bse = yq_stock_bse.income_statement(frequency='a')
-            balance_bse = yq_stock_bse.balance_sheet(frequency='a')
-            cashflow_bse = yq_stock_bse.cash_flow(frequency='a')
-            income_nse = yq_stock_nse.income_statement(frequency='a')
-            balance_nse = yq_stock_nse.balance_sheet(frequency='a')
-            cashflow_nse = yq_stock_nse.cash_flow(frequency='a')
+        # Add Recent Metrics
+        for k, v in selected_data['recent'].items():
+            if not isinstance(v, (dict, list)) and pd.notnull(v):
+                row[f"Recent_{k}"] = v
 
-            # Summary Metrics
-            ks_bse = yq_stock_bse.key_stats.get(ticker_bse, {})
-            sd_bse = yq_stock_bse.summary_detail.get(ticker_bse, {})
-            ks_nse = yq_stock_nse.key_stats.get(ticker_nse, {})
-            sd_nse = yq_stock_nse.summary_detail.get(ticker_nse, {})
+        # Add Annual Financials (Flattened by year)
+        if not selected_data['financials'].empty:
+            for _, r in selected_data['financials'].iterrows():
+                as_of = r.get('asOfDate')
+                if pd.isnull(as_of): continue
+                year = pd.to_datetime(as_of).year
+                for k, v in r.to_dict().items():
+                    # Exclude non-metric metadata
+                    if k not in ['asOfDate', 'periodType', 'currencyCode', 'symbol'] and not isinstance(v, (dict, list)) and pd.notnull(v):
+                        row[f"{k} ({year})"] = v
 
-            # Base info
-            row_base = {
-                'Company Name': stock['Company_Name'],
-                'Symbol_NSE': stock['Symbol_NSE'],
-                'Symbol_BSE': stock['Symbol_BSE'],
-                'BSE Code': stock['BSE_Code'],
-                'ISIN': stock['ISIN'],
-                'YQ Ticker NSE': ticker_nse,
-                'YQ Ticker BSE': ticker_bse
-            }
-
-            # Recent Metrics
-            recent_bse = {**(ks_bse if isinstance(ks_bse, dict) else {}), **(sd_bse if isinstance(sd_bse, dict) else {})}
-            recent_nse = {**(ks_nse if isinstance(ks_nse, dict) else {}), **(sd_nse if isinstance(sd_nse, dict) else {})}
-            for k, v in recent_nse.items():
-                if not isinstance(v, (dict, list)) and pd.notnull(v):
-                    row_base[f"Recent_{k}"] = v
-
-            # Annual metrics flattening
-            annual_rows = {}
-            ticker_dfs = []
-            for df in [income, balance, cashflow]:
-                if isinstance(df, pd.DataFrame) and not df.empty:
-                    if ticker in df.index.get_level_values(0):
-                        tdf = df.loc[ticker]
-                        if 'periodType' in tdf.columns:
-                            tdf = tdf[tdf['periodType'] == '12M']
-                        if not tdf.empty:
-                            if 'asOfDate' not in tdf.columns: tdf = tdf.reset_index()
-                            ticker_dfs.append(tdf)
-
-            if ticker_dfs:
-                merged = ticker_dfs[0]
-                for next_df in ticker_dfs[1:]:
-                    cols = next_df.columns.difference(merged.columns).tolist() + ['asOfDate']
-                    merged = pd.merge(merged, next_df[cols], on='asOfDate', how='outer')
-
-                for _, r in merged.iterrows():
-                    as_of = r.get('asOfDate')
-                    if pd.isnull(as_of): continue
-                    year = pd.to_datetime(as_of).year
-                    for k, v in r.to_dict().items():
-                        if k not in ['asOfDate', 'periodType', 'currencyCode', 'symbol'] and not isinstance(v,(dict,list)) and pd.notnull(v):
-                            annual_rows[f"{k} ({year})"] = v
-
-            all_data.append({**row_base, **annual_rows})
-
-        except Exception as e:
-            logging.error(f"Error for {ticker}: {e}")
+        all_data.append(row)
 
     if all_data:
+        # Convert all collected records into a tabular DataFrame
         final_df = pd.DataFrame(all_data)
-        info_cols = ['Company Name', 'Symbol', 'BSE Code', 'ISIN', 'YQ Ticker']
+
+        # Column Organization: Identifiers first, then sorted metrics
+        info_cols = ['Company Name', 'Symbol_NSE', 'Symbol_BSE', 'BSE Code', 'ISIN', 'Selected Ticker']
         other_cols = sorted([c for c in final_df.columns if c not in info_cols])
-        final_df[info_cols + other_cols].to_excel(OUTPUT_EXCEL, index=False)
-        logging.info(f"Successfully saved results to {OUTPUT_EXCEL}")
+
+        final_df = final_df[info_cols + other_cols]
+
+        # Export to high-precision Excel file
+        final_df.to_excel(OUTPUT_EXCEL, index=False)
+        logging.info(f"Successfully saved {len(final_df)} records to {OUTPUT_EXCEL}")
 
 if __name__ == "__main__":
     import sys
+    # Optional command line argument to limit number of stocks for testing
     limit = int(sys.argv[1]) if len(sys.argv) > 1 else None
     fetch_data(sample_limit=limit)
