@@ -4,7 +4,9 @@ This repository contains tools for extracting historical annual financial statem
 
 ## Features
 - **Consolidated Registry**: Merges NSE and BSE listed company lists using ISIN and Symbol mapping.
-- **Comprehensive Extraction**: Fetches Income Statements, Balance Sheets, and Cash Flow statements (up to 15 years) from Yahoo Finance.
+- **Direct Exchange Extraction**: Fetches historical annual financials (Revenue, Operating Income, Shares) directly from official NSE archives and XBRL filings.
+- **15-Year Depth**: Captures data back to 2011 where available.
+- **Recent Balance Sheet Metrics**: Extracts Receivables, Inventory, PP&E, and Payables for the latest fiscal year.
 - **Wide-Format Output**: Generates an Excel file with metrics labeled by year for easy longitudinal analysis.
 
 ## Setup
@@ -26,10 +28,10 @@ This produces `data/nse_bse_stocks_combined.csv`.
 ### 2. Fetch Fundamentals
 Extract financial data for the stocks in the list:
 ```bash
-python scripts/fetch_fundamentals.py [sample_size]
+python scripts/nse_scraper.py [sample_size]
 ```
-- To run a test on 10 random stocks: `python scripts/fetch_fundamentals.py 10`
-- To run for all stocks (Time intensive): `python scripts/fetch_fundamentals.py`
+- To run a test on 20 random stocks: `python scripts/nse_scraper.py 20`
+- To run for all stocks (Time intensive): `python scripts/nse_scraper.py`
 - Final output is saved to `data/NSE_BSE_Comprehensive_Financials.xlsx`.
 
 ## Directory Structure

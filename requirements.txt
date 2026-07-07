@@ -1,4 +1,5 @@
 pandas
-yahooquery
-openpyxl
 requests
+beautifulsoup4
+openpyxl
+lxml
