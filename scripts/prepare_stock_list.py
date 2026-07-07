@@ -62,14 +62,13 @@ def main():
     print("Consolidating lists using Symbol...")
     # The user specifically requested merging using the symbol.
     # Note: NSE symbols are strings, BSE 'TckrSymb' are also strings.
-    combined = pd.merge(nse_df, bse_df, on='Symbol', how='outer', suffixes=('_NSE', '_BSE'))
+    combined = pd.merge(nse_df, bse_df, on='ISIN', how='outer', suffixes=('_NSE', '_BSE'))
 
     # Consolidate Company Name and ISIN
     combined['Company_Name'] = combined['Company_Name_NSE'].fillna(combined['Company_Name_BSE'])
-    combined['ISIN'] = combined['ISIN_NSE'].fillna(combined['ISIN_BSE'])
 
     # Final cleanup
-    combined = combined[['Company_Name', 'Symbol', 'BSE_Code', 'ISIN']]
+    combined = combined[['Company_Name', 'Symbol_BSE', 'Symbol_NSE', 'BSE_Code', 'ISIN']]
 
     parent_dir = Path(__file__).resolve().parents[1]
     combined.to_csv(parent_dir / 'data' / 'nse_bse_stocks_combined.csv', index=False)

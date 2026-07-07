@@ -35,47 +35,53 @@ def fetch_data(sample_limit=None):
     for _, stock in df_stocks.iterrows():
         # Prefer NSE symbol if available
         # Based on new prepare_stock_list, we have 'Symbol' and 'BSE_Code'
-        symbol = stock.get('Symbol')
-        bse_code = stock.get('BSE_Code')
-
-        # If it's likely an NSE symbol (alphabetic), append .NS
-        # If it's purely numeric (BSE Code), append .BO
-        # Actually, symbols in our combined list are mixed.
-
-        if pd.notnull(symbol) and any(c.isalpha() for c in str(symbol)):
-            ticker = f"{str(symbol).strip()}.NS"
-        elif pd.notnull(bse_code):
-            ticker = f"{str(int(bse_code)).strip()}.BO"
-        elif pd.notnull(symbol): # Fallback
-            ticker = f"{str(symbol).strip()}.BO"
+        # symbol = 'RGIL'
+        # bse_code = 539922
+        symbol_nse = stock.get('Symbol_NSE')
+        symbol_bse = stock.get('Symbol_BSE')
+        if pd.notnull(symbol_nse):
+            ticker_nse = f"{str(symbol_nse).strip()}.NS"
         else:
-            continue
+            ticker_nse = None
+        if pd.notnull(symbol_bse):
+            ticker_bse = f"{str(symbol_bse).strip()}.BO"
+        else:
+            ticker_bse = None
 
         try:
-            logging.info(f"Fetching data for {ticker}...")
-            yq_stock = yq.Ticker(ticker)
+            logging.info(f"Fetching data for BSE {ticker_bse} and NSE {ticker_nse}...")
+            yq_stock_bse = yq.Ticker(ticker_bse)
+            yq_stock_nse = yq.Ticker(ticker_nse)
 
             # Annual Financials (12M only)
-            income = yq_stock.income_statement(frequency='a')
-            balance = yq_stock.balance_sheet(frequency='a')
-            cashflow = yq_stock.cash_flow(frequency='a')
+            income_bse = yq_stock_bse.income_statement(frequency='a')
+            balance_bse = yq_stock_bse.balance_sheet(frequency='a')
+            cashflow_bse = yq_stock_bse.cash_flow(frequency='a')
+            income_nse = yq_stock_nse.income_statement(frequency='a')
+            balance_nse = yq_stock_nse.balance_sheet(frequency='a')
+            cashflow_nse = yq_stock_nse.cash_flow(frequency='a')
 
             # Summary Metrics
-            ks = yq_stock.key_stats.get(ticker, {})
-            sd = yq_stock.summary_detail.get(ticker, {})
+            ks_bse = yq_stock_bse.key_stats.get(ticker_bse, {})
+            sd_bse = yq_stock_bse.summary_detail.get(ticker_bse, {})
+            ks_nse = yq_stock_nse.key_stats.get(ticker_nse, {})
+            sd_nse = yq_stock_nse.summary_detail.get(ticker_nse, {})
 
             # Base info
             row_base = {
                 'Company Name': stock['Company_Name'],
-                'Symbol': stock['Symbol'],
+                'Symbol_NSE': stock['Symbol_NSE'],
+                'Symbol_BSE': stock['Symbol_BSE'],
                 'BSE Code': stock['BSE_Code'],
                 'ISIN': stock['ISIN'],
-                'YQ Ticker': ticker
+                'YQ Ticker NSE': ticker_nse,
+                'YQ Ticker BSE': ticker_bse
             }
 
             # Recent Metrics
-            recent = {**(ks if isinstance(ks, dict) else {}), **(sd if isinstance(sd, dict) else {})}
-            for k, v in recent.items():
+            recent_bse = {**(ks_bse if isinstance(ks_bse, dict) else {}), **(sd_bse if isinstance(sd_bse, dict) else {})}
+            recent_nse = {**(ks_nse if isinstance(ks_nse, dict) else {}), **(sd_nse if isinstance(sd_nse, dict) else {})}
+            for k, v in recent_nse.items():
                 if not isinstance(v, (dict, list)) and pd.notnull(v):
                     row_base[f"Recent_{k}"] = v
 
