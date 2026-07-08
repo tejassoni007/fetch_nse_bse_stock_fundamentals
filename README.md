@@ -4,7 +4,10 @@ This repository contains tools for extracting historical annual financial statem
 
 ## Features
 - **Consolidated Registry**: Merges NSE and BSE listed company lists using ISIN and Symbol mapping.
-- **Comprehensive Extraction**: Fetches Income Statements, Balance Sheets, and Cash Flow statements (up to 15 years) from Yahoo Finance.
+- **Enhanced Historical Extraction**: Utilizes the `Bharat-SM-Data` library to fetch up to 15 years of historical financials (Revenue, Operating Income, Shares) from TickerTape and other reliable sources.
+- **BSE & NSE Coverage**: Supports symbols from both major Indian exchanges.
+- **Recent Balance Sheet Metrics**: Extracts Receivables, Inventory, PP&E, and Payables for the latest fiscal year.
+- **Enterprise Value Calculation**: Computes Total Enterprise Value (TEV) using current Market Cap and balance sheet data.
 - **Wide-Format Output**: Generates an Excel file with metrics labeled by year for easy longitudinal analysis.
 
 ## Setup
@@ -24,12 +27,12 @@ python scripts/prepare_stock_list.py
 This produces `data/nse_bse_stocks_combined.csv`.
 
 ### 2. Fetch Fundamentals
-Extract financial data for the stocks in the list:
+Extract financial data for the stocks in the list using the refined Bharat Scraper:
 ```bash
-python scripts/fetch_fundamentals.py [sample_size]
+python scripts/bharat_scraper.py [sample_size]
 ```
-- To run a test on 10 random stocks: `python scripts/fetch_fundamentals.py 10`
-- To run for all stocks (Time intensive): `python scripts/fetch_fundamentals.py`
+- To run a test on 50 random stocks: `python scripts/bharat_scraper.py 50`
+- To run for all stocks: `python scripts/bharat_scraper.py`
 - Final output is saved to `data/NSE_BSE_Comprehensive_Financials.xlsx`.
 
 ## Directory Structure

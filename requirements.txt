@@ -1,4 +1,9 @@
 pandas
-yahooquery
-openpyxl
 requests
+beautifulsoup4
+openpyxl
+lxml
+Bharat-sm-data
+brotli
+pydash
+html5lib
