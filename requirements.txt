@@ -3,4 +3,7 @@ requests
 beautifulsoup4
 openpyxl
 lxml
-yahooquery
+Bharat-sm-data
+brotli
+pydash
+html5lib
